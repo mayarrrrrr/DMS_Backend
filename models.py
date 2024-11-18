@@ -6,11 +6,12 @@ from datetime import datetime
 db = SQLAlchemy()
 
 class User(db.Model, SerializerMixin):
-    __tablename__ = 'user'
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(), nullable=False)
     phone_number = db.Column(db.String(), nullable=False)
     email = db.Column(db.String(), unique=True, nullable=False)
+    password = db.Column(db.String(100), nullable=False)
     type = db.Column(db.String(), nullable=False)
     
     @validates('password')
@@ -21,62 +22,66 @@ class User(db.Model, SerializerMixin):
     
     @validates('email')
     def validate_email(self, key, email):
-        if not email.endswith("@gmail.com"):
-            raise ValueError("Email is not valid. It should end with @gmail.com")
+        allowed_domains = ["@gmail.com", "@outlook.com", "@yahoo.com"]
+        if not any(email.endswith(domain) for domain in allowed_domains):
+            raise ValueError("Email must end with @gmail.com, @outlook.com, or @yahoo.com.")
         return email
 
-    reports = db.relationship('Disaster', backref='user', lazy=True)  
+    def __repr__(self):
+        return f'<User {self.name}>'
+
+    # Define relationship with Disaster using foreign key
+    reports = db.relationship(
+        'Disaster',
+        backref='reporter',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
     
-    
-    serialize_rules = ('-reports.user',)  
+    # serialize_rules = ('-reports.reporter',)  
     
     def __repr__(self):
         return f'<User {self.name}>'
 
+
 class Rescuer(db.Model, SerializerMixin):
-    __tablename__ = 'rescuer'
+    __tablename__ = 'rescuers'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(), nullable=False)
     phone_number = db.Column(db.String(), nullable=False)
     email = db.Column(db.String(), unique=True, nullable=False)
-    role = db.Column(db.String(), nullable=False)  # firefighter, etc.
-    disasters = db.relationship('Disaster', backref='rescuer', lazy=True)  
+    role = db.Column(db.String(), nullable=False)  # e.g., firefighter, etc.
 
+    # Define relationship with Disaster using foreign key
+    assigned_disasters = db.relationship(
+        'Disaster',
+        backref='rescuer',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
     
-    serialize_rules = ('-disasters.rescuer',)  
+    # serialize_rules = ('-disasters.assigned_rescuer',)  
 
     def __repr__(self):
         return f'<Rescuer {self.name}>'
 
 
-
 class Disaster(db.Model, SerializerMixin):
-    __tablename__ = 'disaster'
+    __tablename__ = 'disasters'
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(), nullable=False)  
     date_reported = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  
-    rescuer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  
+    rescuer_id = db.Column(db.Integer, db.ForeignKey('rescuers.id'), nullable=False)  
     
-    user = db.relationship('User', foreign_keys=[user_id], backref='reported_disasters')
-    rescuer = db.relationship('User', foreign_keys=[rescuer_id], backref='responded_disasters')
-
+    # reporter = db.relationship('User', backref='User.reports', lazy=True)
     
-    serialize_rules = ('-user.reported_disasters', '-rescuer.responded_disasters')
+    # Relationships for serialization rules
+    # serialize_rules = ('-reporter.reports', '-assigned_rescuer.disasters')
 
     def __repr__(self):
-        return f'<Disaster {self.description} - Reported by {self.user.name}>'
-    
+        return f'<Disaster {self.description} - Reported by {self.reporter.name}>'
 
 
-class Reporter(db.Model, SerializerMixin):
-    __tablename__ = 'reporter'
-    id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
-    
-    
-    serialize_rules = ('-reports.user',)  
-    
-    def __repr__(self):
-        return f'<Reporter {self.id} - {self.name}>'
 
